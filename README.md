@@ -5,6 +5,20 @@ assorted utilities relevant to internal operations
 
 Downloads raw event data from Mixpanel.
 
+### Installation
+
+With bundler:
+
+	$ cd mp_event_dump
+	$ bundle install
+
+With the install script:
+
+	$ cd mp_event_dump
+	$ [sudo] bash ./install.sh
+
+### Usage
+
 	Usage: mp_event_dump [options] events...
 	    -f, --from-date=DATE             The start of the date range
 	    -t, --to-date=DATE               The end of the date range
