@@ -1,0 +1,106 @@
+#!/usr/bin/ruby
+
+require 'json'
+require 'csv'
+require 'mixpanel_client'
+require 'optparse'
+require 'colorize'
+
+if ENV['HELLO_MIXPANEL_API_KEY'].nil? or ENV['HELLO_MIXPANEL_API_SECRET'].nil?
+  STDERR.puts "Error: Your environment must export HELLO_MIXPANEL_API_KEY and HELLO_MIXPANEL_API_SECRET".red.bold
+  exit(1)
+end
+
+API_KEY = ENV['HELLO_MIXPANEL_API_KEY']
+API_SECRET = ENV['HELLO_MIXPANEL_API_SECRET']
+
+QUERY_PLATFORM_IOS = 'properties["Platform"] == "iOS"'
+QUERY_PLATFORM_ANDROID = 'properties["Platform"] == "android"'
+def all(*queries)
+  queries.join(' and ')
+end
+
+QUERIES = {
+  'ios' => QUERY_PLATFORM_IOS,
+  'ios.ble' => all(QUERY_PLATFORM_IOS, '"is.hello.ble" in properties["domain"]'),
+  'android' => QUERY_PLATFORM_ANDROID,
+  'android.ble' => all(QUERY_PLATFORM_ANDROID, '"is.hello.sense.bluetooth" in properties["type"]'),
+}
+
+ARGV << '-h' if ARGV.empty?
+
+options = {}
+output_type = 'pretty-json'
+OptionParser.new do |opts|
+  opts.banner = "Usage: #{File.basename $0} [options] events...".blue
+  
+  opts.on("-fDATE", "--from-date=DATE", "The start of the date range") do |value|
+    options[:from_date] = value
+  end
+  
+  opts.on("-tDATE", "--to-date=DATE", "The end of the date range") do |value|
+    options[:to_date] = value
+  end
+  
+  opts.on("-qQUERY", "--query=QUERY", "The query to apply") do |value|
+    predefined_query = QUERIES[value]
+    if predefined_query.nil?
+      options[:where] = value
+    else
+      options[:where] = predefined_query
+    end
+  end
+  
+  opts.on("-oTYPE", "--output=TYPE", "json, pretty-json, or csv") do |value|
+    output_type = value
+  end
+  
+  opts.on_tail("-h", "--help", "Show this message") do
+    puts opts
+    puts "Built-in queries:".blue
+    QUERIES.keys.each do |query_name|
+      puts "    #{query_name}"
+    end
+    exit
+  end
+end.parse!
+
+unless options[:from_date] and options[:to_date]
+  STDERR.puts "Error: You must specify a date range.".red.bold
+  exit(1)
+end
+
+events = ARGV
+if events.empty?
+  events = ['Error']
+end
+
+options[:event] = events
+
+mp_client = Mixpanel::Client.new(api_key: API_KEY, api_secret: API_SECRET)
+response = mp_client.request('export', options)
+
+if response.empty?
+  STDERR.puts "Warning: No matching events found".yellow
+end
+
+case output_type.downcase
+when 'json'
+  puts JSON.generate(response)
+when 'pretty-json'
+  puts JSON.pretty_generate(response)
+when 'csv'
+  exit if response.empty?
+  
+  headers = ["Event Name"] + response[0]['properties'].keys
+  output = CSV.generate do |csv|
+    csv << headers
+    response.each do |event|
+      csv << [event['event']] + event['properties'].values
+    end
+  end
+  puts output
+else
+  STDERR.puts "Error: Unknown output type #{output_type}."
+  exit(1)
+end
