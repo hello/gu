@@ -80,6 +80,10 @@ options[:event] = events
 mp_client = Mixpanel::Client.new(api_key: API_KEY, api_secret: API_SECRET)
 response = mp_client.request('export', options)
 
+if response.empty?
+  STDERR.puts "Warning: No matching events found".yellow
+end
+
 case output_type.downcase
 when 'json'
   puts JSON.generate(response)
@@ -96,4 +100,7 @@ when 'csv'
     end
   end
   puts output
+else
+  STDERR.puts "Error: Unknown output type #{output_type}."
+  exit(1)
 end
